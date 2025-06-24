@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 
-# todo
+
 # Load the cleaned Excel file
 file_path = "/Users/petrosdimitropoulos/Downloads/50 stocks_FTSE100.xlsx"
 df = pd.read_excel(file_path)
@@ -111,7 +111,7 @@ gmvp_return = w_gmvp @ mu
 gmvp_std = np.sqrt(w_gmvp.T @ cov_matrix @ w_gmvp)
 
 
-# Re-plot the EPF with the CML and Tangent Point
+# Plot the EPF with the CML, GMVP and Tangent
 plt.figure(figsize=(10, 6))
 plt.plot(frontier_risks, target_returns, label='Efficient Frontier', color='b')
 plt.plot(cml_x, cml_y, label='Capital Market Line', color='g', linestyle='--')
@@ -168,8 +168,6 @@ backtest_df = pd.DataFrame({
 initial_value = 1_000_000
 backtest_df['Value'] = initial_value * (1 + backtest_df['Return']).cumprod()
 
-
-print(backtest_df.head())
 
 # Now that backtest_df exists, compute GMVP returns and DataFrame properly
 gmvp_returns_series = stock_returns.loc[backtest_df.index] @ w_gmvp
@@ -289,23 +287,7 @@ gmvp_hedged_df['Hedged'] = gmvp_hedged_df['Hedged'].fillna(False)
 gmvp_hedged_df['Value'] = 1_000_000 * (1 + gmvp_hedged_df['Return']).cumprod()
 
 
-# Plot updated comparison including GMVP Hedged
-plt.figure(figsize=(10, 6))
-plt.plot(backtest_df.index, backtest_df['Value'], label='Unhedged Portfolio')
-plt.plot(hedged_df.index, hedged_df['Value'], label='Hedged Portfolio')
-plt.plot(gmvp_df.index, gmvp_df['Value'], label='GMVP Portfolio')
-plt.plot(gmvp_hedged_df.index, gmvp_hedged_df['Value'], label='GMVP Hedged Portfolio')
-plt.plot(ftse_value.index, ftse_value, label='FTSE 100 Index', linestyle='--')
-plt.title('Cumulative Value: All Portfolios vs FTSE 100')
-plt.xlabel('Date')
-plt.ylabel('Value (£)')
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
 # --- Performance Summary ---
-
 def performance_summary(returns, name):
     total_return = (1 + returns).prod() - 1
     avg_return = returns.mean()
@@ -346,8 +328,8 @@ performance_summary(gmvp_df['Return'], "GMVP Portfolio")
 performance_summary(ftse_returns, "FTSE 100 Index")
 performance_summary(gmvp_hedged_df['Return'], "GMVP Hedged Portfolio")
 
-# --- Plot Cumulative Return of All Portfolios ---
 
+# --- Plot Cumulative Return of All Portfolios ---
 def cumulative_return(returns):
     return (1 + returns).cumprod() - 1
 
@@ -372,8 +354,8 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# --- Compile Performance Metrics into a Report Table ---
 
+# --- Compile Performance Metrics into a Report Table ---
 def collect_metrics(returns, name):
     total_return = (1 + returns).prod() - 1
     avg_return = returns.mean()
