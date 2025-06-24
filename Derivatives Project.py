@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 
-
+# todo
 # Load the cleaned Excel file
 file_path = "/Users/petrosdimitropoulos/Downloads/50 stocks_FTSE100.xlsx"
 df = pd.read_excel(file_path)
