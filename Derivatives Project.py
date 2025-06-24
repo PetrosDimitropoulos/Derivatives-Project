@@ -128,8 +128,13 @@ plt.show()
 
 # --- Rolling Window Backtest (Unhedged Tangency Portfolio) ---
 rolling_window = 180
+
 portfolio_returns = []
 portfolio_weights = []
+
+gmvp_returns = []
+gmvp_weights = []
+
 test_dates = stock_returns.index[rolling_window:]
 
 for i in range(rolling_window, len(stock_returns)):
@@ -148,6 +153,12 @@ for i in range(rolling_window, len(stock_returns)):
     bounds = tuple((0, 1) for _ in range(len(mu_t)))
     result = minimize(neg_sharpe, w0, method='SLSQP', bounds=bounds, constraints=constraints)
 
+    # GMVP at time t (rolling)
+    def gmvp_objective(w):
+        return w.T @ cov_t @ w
+
+    result_gmvp = minimize(gmvp_objective, w0, method='SLSQP', bounds=bounds, constraints=constraints)
+
     if result.success:
         w_opt = result.x
         ret = stock_returns.iloc[i] @ w_opt
@@ -156,6 +167,15 @@ for i in range(rolling_window, len(stock_returns)):
     else:
         portfolio_returns.append(np.nan)
         portfolio_weights.append([np.nan] * len(mu_t))
+
+    if result_gmvp.success:
+        w_gmvp_t = result_gmvp.x
+        gmvp_ret = stock_returns.iloc[i] @ w_gmvp_t
+        gmvp_returns.append(gmvp_ret)
+        gmvp_weights.append(w_gmvp_t)
+    else:
+        gmvp_returns.append(np.nan)
+        gmvp_weights.append([np.nan] * len(mu_t))
 
 # Store backtested results
 backtest_df = pd.DataFrame({
@@ -169,10 +189,15 @@ initial_value = 1_000_000
 backtest_df['Value'] = initial_value * (1 + backtest_df['Return']).cumprod()
 
 
-# Now that backtest_df exists, compute GMVP returns and DataFrame properly
-gmvp_returns_series = stock_returns.loc[backtest_df.index] @ w_gmvp
-gmvp_df = pd.DataFrame({'Return': gmvp_returns_series}, index=backtest_df.index)
-gmvp_df['Value'] = 1_000_000 * (1 + gmvp_df['Return']).cumprod()
+gmvp_backtest_df = pd.DataFrame({
+    'Date': test_dates,
+    'Return': gmvp_returns
+}).set_index('Date')
+gmvp_backtest_df['Value'] = 1_000_000 * (1 + gmvp_backtest_df['Return']).cumprod()
+
+
+# Replace static GMVP with rolling backtest copy
+gmvp_df = gmvp_backtest_df.copy()
 
 # --- Load FTSE 100 Total Return Index ---
 ftse_df = pd.read_excel("/Users/petrosdimitropoulos/Downloads/FTSE100 Index.xlsx")
@@ -211,11 +236,14 @@ for i in range(rolling_window, len(stock_returns) - 1):
         N_t = beta * V_t / contract_value
 
         # Hedge return at t+1
-        r_index_next = ftse_prices.pct_change().iloc[i + 1]
-        hedge_return = -beta * r_index_next
+        index_price_t = ftse_prices.iloc[i]
+        index_price_t1 = ftse_prices.iloc[i + 1]
+        r_index_diff = index_price_t - index_price_t1  # short futures: profit when index falls
+        hedge_return = (N_t * 10 * r_index_diff) / V_t
 
         # Adjusted portfolio return
-        r_portfolio = portfolio_returns[i - rolling_window + 1] + hedge_return
+        r_portfolio_unhedged = stock_returns.iloc[i + 1] @ w_opt
+        r_portfolio = r_portfolio_unhedged + hedge_return
         hedged_returns.append(r_portfolio)
         hedge_flags.append(True)
     else:
@@ -260,15 +288,18 @@ for i in range(rolling_window, len(stock_returns) - 1):
         N_t = beta * V_t / contract_value
 
         # Hedge return at t+1
-        r_index_next = ftse_prices.pct_change().iloc[i + 1]
-        hedge_return = -beta * r_index_next
+        index_price_t = ftse_prices.iloc[i]
+        index_price_t1 = ftse_prices.iloc[i + 1]
+        r_index_diff = index_price_t - index_price_t1
+        hedge_return = (N_t * 10 * r_index_diff) / V_t
 
         # Adjusted GMVP return at t+1
-        r_portfolio = gmvp_returns_series.iloc[i - rolling_window + 1] + hedge_return
+        r_portfolio_unhedged = stock_returns.iloc[i + 1] @ w_gmvp_t
+        r_portfolio = r_portfolio_unhedged + hedge_return
         gmvp_hedged_returns.append(r_portfolio)
         gmvp_hedge_flags.append(True)
     else:
-        gmvp_hedged_returns.append(gmvp_returns_series.iloc[i - rolling_window + 1])
+        gmvp_hedged_returns.append(gmvp_returns[i - rolling_window + 1])
         gmvp_hedge_flags.append(False)
 
 # Create hedged GMVP DataFrame
