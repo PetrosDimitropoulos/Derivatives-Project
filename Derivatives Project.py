@@ -18,6 +18,9 @@ df = df.apply(pd.to_numeric, errors='coerce')
 # Calculate monthly percentage returns
 stock_returns = df.pct_change().dropna()
 
+# Display first few rows of returns
+print(stock_returns.head())
+
 # --- Load risk-free rate (monthly, in percent annualized) ---
 rf_df = pd.read_excel("/Users/petrosdimitropoulos/Downloads/Risk free rate.xlsx")
 rf_df['Date'] = pd.to_datetime(rf_df['Date'])
@@ -26,9 +29,6 @@ rf_df.set_index('Date', inplace=True)
 # Convert annual percentage rates to equivalent monthly compounded rates
 rf_series = (1 + rf_df.iloc[:, 0] / 100) ** (1/12) - 1
 rf_series = rf_series.reindex(stock_returns.index).dropna()
-
-# Display first few rows of returns
-print(stock_returns.head())
 
 
 # --- Efficient Portfolio Frontier (EPF) calculation and plotting ---
@@ -93,20 +93,6 @@ std_tangent = np.sqrt(w_tangent.T @ cov_matrix @ w_tangent)
 cml_x = np.linspace(0, std_tangent + 0.02, 100)
 cml_y = risk_free_rate + (ret_tangent - risk_free_rate) / std_tangent * cml_x
 
-# Re-plot the EPF with the CML and Tangent Point
-plt.figure(figsize=(10, 6))
-plt.plot(frontier_risks, target_returns, label='Efficient Frontier', color='b')
-plt.plot(cml_x, cml_y, label='Capital Market Line', color='g', linestyle='--')
-plt.scatter(std_tangent, ret_tangent, color='r', label='Tangency Portfolio', zorder=5)
-plt.xlabel('Portfolio Standard Deviation (Risk)')
-plt.ylabel('Portfolio Expected Return')
-plt.title('Efficient Frontier and Capital Market Line')
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-
 # --- Global Minimum Variance Portfolio (GMVP) ---
 
 # Constraints: fully invested, no short-selling
@@ -123,6 +109,21 @@ gmvp_result = minimize(portfolio_variance, w0, args=(cov_matrix,), method='SLSQP
 w_gmvp = gmvp_result.x
 gmvp_return = w_gmvp @ mu
 gmvp_std = np.sqrt(w_gmvp.T @ cov_matrix @ w_gmvp)
+
+
+# Re-plot the EPF with the CML and Tangent Point
+plt.figure(figsize=(10, 6))
+plt.plot(frontier_risks, target_returns, label='Efficient Frontier', color='b')
+plt.plot(cml_x, cml_y, label='Capital Market Line', color='g', linestyle='--')
+plt.scatter(std_tangent, ret_tangent, color='r', label='Tangency Portfolio', zorder=5)
+plt.scatter(gmvp_std, gmvp_return, color='m', label='GMVP', zorder=5)
+plt.xlabel('Portfolio Standard Deviation (Risk)')
+plt.ylabel('Portfolio Expected Return')
+plt.title('Efficient Frontier and Capital Market Line')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
 
 
 # --- Rolling Window Backtest (Unhedged Tangency Portfolio) ---
