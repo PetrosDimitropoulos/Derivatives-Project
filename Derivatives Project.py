@@ -30,16 +30,37 @@ rf_df.set_index('Date', inplace=True)
 rf_series = (1 + rf_df.iloc[:, 0] / 100) ** (1/12) - 1
 rf_series = rf_series.reindex(stock_returns.index).dropna()
 
-
-# --- Efficient Portfolio Frontier (EPF) calculation and plotting ---
-
 # Compute expected returns and covariance matrix
 mu = stock_returns.mean()
 cov_matrix = stock_returns.cov()
 num_assets = len(mu)
 
+# Initial guess: equally weighted portfolio
+w0 = np.ones(num_assets) / num_assets
+
+
+# --- Global Minimum Variance Portfolio (GMVP) ---
+
+# Constraints: fully invested, no short-selling
+gmvp_constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+gmvp_bounds = tuple((0, 1) for _ in range(num_assets))
+
+# Objective: minimize portfolio variance
+def portfolio_variance(w, cov):
+    return w.T @ cov @ w
+
+gmvp_result = minimize(portfolio_variance, w0, args=(cov_matrix,), method='SLSQP',
+                       bounds=gmvp_bounds, constraints=gmvp_constraints)
+
+w_gmvp = gmvp_result.x
+gmvp_return = w_gmvp @ mu
+gmvp_std = np.sqrt(w_gmvp.T @ cov_matrix @ w_gmvp)
+
+
+# --- Efficient Portfolio Frontier (EPF) calculation and plotting ---
+
 # Range of target returns for the EPF
-target_returns = np.linspace(mu.min(), mu.max(), 100)
+target_returns = np.linspace(gmvp_return, mu.max(), 100)
 frontier_risks = []
 
 # Constraints template
@@ -51,9 +72,6 @@ def get_constraints(target_return):
 
 # Bounds for weights: no short selling
 bounds = tuple((0, 1) for _ in range(num_assets))
-
-# Initial guess: equally weighted portfolio
-w0 = np.ones(num_assets) / num_assets
 
 # Solve for each target return
 for R_target in target_returns:
@@ -92,23 +110,6 @@ std_tangent = np.sqrt(w_tangent.T @ cov_matrix @ w_tangent)
 # Capital Market Line (CML)
 cml_x = np.linspace(0, std_tangent + 0.02, 100)
 cml_y = risk_free_rate + (ret_tangent - risk_free_rate) / std_tangent * cml_x
-
-# --- Global Minimum Variance Portfolio (GMVP) ---
-
-# Constraints: fully invested, no short-selling
-gmvp_constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
-gmvp_bounds = tuple((0, 1) for _ in range(num_assets))
-
-# Objective: minimize portfolio variance
-def portfolio_variance(w, cov):
-    return w.T @ cov @ w
-
-gmvp_result = minimize(portfolio_variance, w0, args=(cov_matrix,), method='SLSQP',
-                       bounds=gmvp_bounds, constraints=gmvp_constraints)
-
-w_gmvp = gmvp_result.x
-gmvp_return = w_gmvp @ mu
-gmvp_std = np.sqrt(w_gmvp.T @ cov_matrix @ w_gmvp)
 
 
 # Plot the EPF with the CML, GMVP and Tangent
